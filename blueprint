@@ -1,0 +1,63 @@
+blueprint:
+  name: "Move items from Google to Bring"
+  description: "Automatización para mover elementos de una lista de Google a una lista de Bring y eliminarlos de la lista de Google."
+  domain: automation
+  input:
+    google_list:
+      name: List 1 (Google)
+      description: Selecciona la lista de Google desde donde quieres mover los elementos
+      selector:
+        entity:
+          domain:
+            - todo
+          multiple: false
+    bring_list:
+      name: List 2 (Bring)
+      description: Selecciona la lista de Bring donde copiar los elementos
+      selector:
+        entity:
+          domain:
+            - todo
+          multiple: false
+
+trigger:
+  - platform: state
+    entity_id: !input 'google_list'
+
+condition: []
+
+action:
+  - variables:
+      google_list: !input 'google_list'
+      bring_list: !input 'bring_list'
+
+  # Obtener los elementos incompletos de Google
+  - service: todo.get_items
+    target:
+      entity_id: "{{ google_list }}"
+    data:
+      status: needs_action
+    response_variable: google_incompleted
+
+  # Copiar los elementos de Google a la lista Bring
+  - repeat:
+      for_each: "{{ google_incompleted[google_list]['items'] }}"
+      sequence:
+        - condition: template
+          value_template: "{{ repeat.item.summary != '' }}"
+        
+        # Añadir el elemento a Bring
+        - service: todo.add_item
+          target:
+            entity_id: "{{ bring_list }}"
+          data:
+            item: "{{ repeat.item.summary }}"
+        
+        # Eliminar el elemento de Google después de haberlo copiado
+        - service: todo.remove_item
+          target:
+            entity_id: "{{ google_list }}"
+          data:
+            item: "{{ repeat.item.summary }}"
+
+mode: single
